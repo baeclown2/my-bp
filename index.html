@@ -9,9 +9,169 @@
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png">
   <link rel="manifest" href="data:application/manifest+json;utf8,{%22name%22:%22혈압수첩%22,%22short_name%22:%22혈압수첩%22,%22start_url%22:%22/%22,%22display%22:%22standalone%22,%22background_color%22:%22#ffffff%22,%22theme_color%22:%22#2563eb%22}">
   
+  <!-- Chart.js 및 SheetJS(XLSX) 라이브러리 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- XLSX (Excel) 변환 외부 라이브러리 추가 -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Firebase SDK 모듈 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // Firebase 설정 데이터 (사용자 전달 설정값 적용)
+    const firebaseConfig = {
+      apiKey: "AIzaSyD6v6GiHBNE4ZOS47HCE-keJrnhjmk-ErE",
+      authDomain: "my-bp-c948e.firebaseapp.com",
+      projectId: "my-bp-c948e",
+      storageBucket: "my-bp-c948e.firebasestorage.app",
+      messagingSenderId: "774469305076",
+      appId: "1:774469305076:web:d10b06954efb447a2214a1",
+      measurementId: "G-46CBT0Q2NG"
+    };
+
+    // Firebase 초기화
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const bpCollection = collection(db, "bpRecords");
+
+    let records = [];
+
+    // Chart.js 초기화
+    const ctx = document.getElementById('bpChart').getContext('2d');
+    let chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: '수축기', data: [], borderColor: '#ef4444', backgroundColor: '#ef4444', tension: 0.2 },
+          { label: '이완기', data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f6', tension: 0.2 }
+        ]
+      },
+      options: { 
+        responsive: true, 
+        scales: { 
+          x: {
+            ticks: {
+              font: { size: 10 },
+              maxRotation: 45,
+              minRotation: 0
+            }
+          },
+          y: { min: 50, max: 180 } 
+        } 
+      }
+    });
+
+    // 실시간 데이터 수신 (PC/아이폰 자동 동기화)
+    const q = query(bpCollection, orderBy("rawTime", "asc"));
+    onSnapshot(q, (snapshot) => {
+      records = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      updateUI();
+    });
+
+    function updateUI() {
+      const recentRecords = records.slice(-10);
+
+      chart.data.labels = recentRecords.map(r => r.displayTime || r.time);
+      chart.data.datasets[0].data = recentRecords.map(r => r.sys);
+      chart.data.datasets[1].data = recentRecords.map(r => r.dia);
+      chart.update();
+
+      const listEl = document.getElementById('recordList');
+      listEl.innerHTML = records.slice().reverse().map((r) => {
+        const memoHtml = r.memo && r.memo.trim() !== '' 
+          ? `<div class="memo-tag">💬 ${r.memo}</div>` 
+          : `<div class="no-memo"></div>`;
+          
+        return `
+          <li>
+            <div class="record-info">
+              <div class="bp-val">${r.sys} / ${r.dia} <span class="unit">mmHg</span></div>
+              <div class="date">🕒 ${r.displayTime || r.time}</div>
+            </div>
+            ${memoHtml}
+            <button class="del-btn" onclick="deleteRecord('${r.id}')">삭제</button>
+          </li>
+        `;
+      }).join('');
+    }
+
+    // 기록 삭제 함수
+    window.deleteRecord = async function(id) {
+      if (confirm('이 기록을 삭제하시겠습니까?')) {
+        try {
+          await deleteDoc(doc(db, "bpRecords", id));
+        } catch (e) {
+          alert("삭제 중 오류가 발생했습니다: " + e.message);
+        }
+      }
+    };
+
+    // XLSX 다운로드 함수
+    window.exportToXlsx = function() {
+      if (records.length === 0) {
+        alert('저장된 혈압 기록이 없습니다.');
+        return;
+      }
+
+      const excelData = records.map(r => ({
+        "측정 일시": r.displayTime || r.time,
+        "수축기 (mmHg)": r.sys,
+        "이완기 (mmHg)": r.dia,
+        "메모": r.memo || ''
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "혈압기록");
+
+      worksheet['!cols'] = [
+        { wch: 18 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 25 }
+      ];
+
+      const today = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(workbook, `혈압기록_${today}.xlsx`);
+    };
+
+    // 폼 제출 이벤트 (새 혈압 기록 등록)
+    document.getElementById('bpForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const sys = Number(document.getElementById('sys').value);
+      const dia = Number(document.getElementById('dia').value);
+      const memo = document.getElementById('memo').value;
+      const now = new Date();
+      
+      const month = now.getMonth() + 1;
+      const date = now.getDate();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      
+      const displayTime = `${month}/${date} ${hours}:${minutes}`;
+
+      try {
+        await addDoc(bpCollection, {
+          sys,
+          dia,
+          memo,
+          time: displayTime,
+          displayTime: displayTime,
+          rawTime: now.toISOString()
+        });
+
+        document.getElementById('sys').value = '';
+        document.getElementById('dia').value = '';
+        document.getElementById('memo').value = '';
+      } catch (e) {
+        alert("저장 중 오류가 발생했습니다: " + e.message);
+      }
+    });
+  </script>
 
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -74,129 +234,5 @@
     <ul id="recordList"></ul>
   </div>
 
-  <script>
-    let records = JSON.parse(localStorage.getItem('bpRecords') || '[]');
-    const ctx = document.getElementById('bpChart').getContext('2d');
-
-    let chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          { label: '수축기', data: [], borderColor: '#ef4444', backgroundColor: '#ef4444', tension: 0.2 },
-          { label: '이완기', data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f6', tension: 0.2 }
-        ]
-      },
-      options: { 
-        responsive: true, 
-        scales: { 
-          x: {
-            ticks: {
-              font: { size: 10 },
-              maxRotation: 45,
-              minRotation: 0
-            }
-          },
-          y: { min: 50, max: 180 } 
-        } 
-      }
-    });
-
-    function updateUI() {
-      records.sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0));
-      const recentRecords = records.slice(-10);
-
-      chart.data.labels = recentRecords.map(r => r.displayTime || r.time);
-      chart.data.datasets[0].data = recentRecords.map(r => r.sys);
-      chart.data.datasets[1].data = recentRecords.map(r => r.dia);
-      chart.update();
-
-      const listEl = document.getElementById('recordList');
-      listEl.innerHTML = records.slice().reverse().map((r, reversedIndex) => {
-        const actualIndex = records.length - 1 - reversedIndex;
-        const memoHtml = r.memo && r.memo.trim() !== '' 
-          ? `<div class="memo-tag">💬 ${r.memo}</div>` 
-          : `<div class="no-memo"></div>`;
-          
-        return `
-          <li>
-            <div class="record-info">
-              <div class="bp-val">${r.sys} / ${r.dia} <span class="unit">mmHg</span></div>
-              <div class="date">🕒 ${r.displayTime || r.time}</div>
-            </div>
-            ${memoHtml}
-            <button class="del-btn" onclick="deleteRecord(${actualIndex})">삭제</button>
-          </li>
-        `;
-      }).join('');
-    }
-
-    function deleteRecord(index) {
-      if (confirm('이 기록을 삭제하시겠습니까?')) {
-        records.splice(index, 1);
-        localStorage.setItem('bpRecords', JSON.stringify(records));
-        updateUI();
-      }
-    }
-
-    /* 순수 XLSX(엑셀) 파일로 생성 및 다운로드하는 함수 */
-    function exportToXlsx() {
-      if (records.length === 0) {
-        alert('저장된 혈압 기록이 없습니다.');
-        return;
-      }
-
-      // 1. 엑셀 워크시트에 들어갈 데이터 정리
-      const excelData = records.map(r => ({
-        "측정 일시": r.displayTime || r.time,
-        "수축기 (mmHg)": r.sys,
-        "이완기 (mmHg)": r.dia,
-        "메모": r.memo || ''
-      }));
-
-      // 2. XLSX 파일 생성
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "혈압기록");
-
-      // 3. 열 너비 자동 맞춤
-      worksheet['!cols'] = [
-        { wch: 18 }, // 측정 일시
-        { wch: 15 }, // 수축기
-        { wch: 15 }, // 이완기
-        { wch: 25 }  // 메모
-      ];
-
-      // 4. 오늘 날짜로 .xlsx 파일 다운로드
-      const today = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(workbook, `혈압기록_${today}.xlsx`);
-    }
-
-    document.getElementById('bpForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const sys = Number(document.getElementById('sys').value);
-      const dia = Number(document.getElementById('dia').value);
-      const memo = document.getElementById('memo').value;
-      const now = new Date();
-      
-      const month = now.getMonth() + 1;
-      const date = now.getDate();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      
-      const displayTime = `${month}/${date} ${hours}:${minutes}`;
-
-      records.push({ sys, dia, memo, time: displayTime, displayTime: displayTime, rawTime: now.toISOString() });
-      localStorage.setItem('bpRecords', JSON.stringify(records));
-
-      document.getElementById('sys').value = '';
-      document.getElementById('dia').value = '';
-      document.getElementById('memo').value = '';
-      updateUI();
-      alert('기록되었습니다!');
-    });
-
-    updateUI();
-  </script>
 </body>
 </html>
