@@ -10,6 +10,9 @@
   <link rel="manifest" href="data:application/manifest+json;utf8,{%22name%22:%22혈압수첩%22,%22short_name%22:%22혈압수첩%22,%22start_url%22:%22/%22,%22display%22:%22standalone%22,%22background_color%22:%22#ffffff%22,%22theme_color%22:%22#2563eb%22}">
   
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- XLSX (Excel) 변환 외부 라이브러리 추가 -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background: #f3f4f6; margin: 0; padding: 16px; color: #1f2937; }
@@ -66,7 +69,7 @@
   <div class="card">
     <div class="header-group">
       <h3>📝 최근 기록</h3>
-      <button type="button" class="excel-btn" onclick="exportToExcel()">📊 엑셀 다운로드</button>
+      <button type="button" class="excel-btn" onclick="exportToXlsx()">📊 XLSX 다운로드</button>
     </div>
     <ul id="recordList"></ul>
   </div>
@@ -136,34 +139,37 @@
       }
     }
 
-    /* 엑셀 파일(CSV) 다운로드 함수 */
-    function exportToExcel() {
+    /* 순수 XLSX(엑셀) 파일로 생성 및 다운로드하는 함수 */
+    function exportToXlsx() {
       if (records.length === 0) {
         alert('저장된 혈압 기록이 없습니다.');
         return;
       }
 
-      // 한글 깨짐 방지를 위한 BOM 코드 추가
-      let csvContent = "\uFEFF일시,수축기(mmHg),이완기(mmHg),메모\n";
+      // 1. 엑셀 워크시트에 들어갈 데이터 정리
+      const excelData = records.map(r => ({
+        "측정 일시": r.displayTime || r.time,
+        "수축기 (mmHg)": r.sys,
+        "이완기 (mmHg)": r.dia,
+        "메모": r.memo || ''
+      }));
 
-      records.forEach(r => {
-        const time = `"${r.displayTime || r.time}"`;
-        const sys = r.sys;
-        const dia = r.dia;
-        const memo = `"${(r.memo || '').replace(/"/g, '""')}"`;
-        csvContent += `${time},${sys},${dia},${memo}\n`;
-      });
+      // 2. XLSX 파일 생성
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "혈압기록");
 
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      
+      // 3. 열 너비 자동 맞춤
+      worksheet['!cols'] = [
+        { wch: 18 }, // 측정 일시
+        { wch: 15 }, // 수축기
+        { wch: 15 }, // 이완기
+        { wch: 25 }  // 메모
+      ];
+
+      // 4. 오늘 날짜로 .xlsx 파일 다운로드
       const today = new Date().toISOString().slice(0, 10);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `혈압기록_${today}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      XLSX.writeFile(workbook, `혈압기록_${today}.xlsx`);
     }
 
     document.getElementById('bpForm').addEventListener('submit', (e) => {
