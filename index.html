@@ -17,12 +17,17 @@
     button.submit-btn { width: 100%; background: #2563eb; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 16px; cursor: pointer; }
     .alarm-info { background: #eff6ff; padding: 12px; border-radius: 8px; font-size: 13px; color: #1e40af; margin-bottom: 16px; text-align: center; }
     ul { list-style: none; padding: 0; margin: 0; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #f3f4f6; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #f3f4f6; gap: 8px; }
     
-    /* 최근 기록 글씨 크기 */
+    /* 최근 기록 글씨 크기 및 레이아웃 */
+    .record-info { flex-shrink: 0; }
     .bp-val { font-size: 20px; font-weight: 800; color: #111827; }
     .unit { font-size: 14px; font-weight: normal; color: #6b7280; }
-    .date { color: #4b5563; font-size: 14px; font-weight: 600; margin-top: 4px; }
+    .date { color: #4b5563; font-size: 13px; font-weight: 600; margin-top: 2px; }
+    
+    /* 측정치와 삭제 버튼 사이의 메모 영역 */
+    .memo-tag { flex: 1; font-size: 13px; color: #374151; background: #f3f4f6; padding: 6px 10px; border-radius: 6px; margin: 0 4px; word-break: break-all; }
+    .no-memo { flex: 1; }
     
     /* 삭제 버튼 */
     .del-btn { background: #fee2e2; color: #ef4444; border: none; padding: 5px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: bold; flex-shrink: 0; }
@@ -42,6 +47,9 @@
       
       <label>이완기 (낮은 혈압)</label>
       <input type="number" id="dia" placeholder="예: 80" required>
+      
+      <label>메모 (선택사항)</label>
+      <input type="text" id="memo" placeholder="예: 식전, 약 복용, 두통 등">
       
       <button type="submit" class="submit-btn">기록하기</button>
     </form>
@@ -89,7 +97,6 @@
       records.sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0));
       const recentRecords = records.slice(-10);
 
-      // 그래프 가로축 라벨에 날짜 + 시간 표시 (예: 10/24 09:00)
       chart.data.labels = recentRecords.map(r => r.displayTime || r.time);
       chart.data.datasets[0].data = recentRecords.map(r => r.sys);
       chart.data.datasets[1].data = recentRecords.map(r => r.dia);
@@ -98,12 +105,17 @@
       const listEl = document.getElementById('recordList');
       listEl.innerHTML = records.slice().reverse().map((r, reversedIndex) => {
         const actualIndex = records.length - 1 - reversedIndex;
+        const memoHtml = r.memo && r.memo.trim() !== '' 
+          ? `<div class="memo-tag">💬 ${r.memo}</div>` 
+          : `<div class="no-memo"></div>`;
+          
         return `
           <li>
-            <div>
+            <div class="record-info">
               <div class="bp-val">${r.sys} / ${r.dia} <span class="unit">mmHg</span></div>
               <div class="date">🕒 ${r.displayTime || r.time}</div>
             </div>
+            ${memoHtml}
             <button class="del-btn" onclick="deleteRecord(${actualIndex})">삭제</button>
           </li>
         `;
@@ -122,6 +134,7 @@
       e.preventDefault();
       const sys = Number(document.getElementById('sys').value);
       const dia = Number(document.getElementById('dia').value);
+      const memo = document.getElementById('memo').value;
       const now = new Date();
       
       const month = now.getMonth() + 1;
@@ -131,11 +144,12 @@
       
       const displayTime = `${month}/${date} ${hours}:${minutes}`;
 
-      records.push({ sys, dia, time: displayTime, displayTime: displayTime, rawTime: now.toISOString() });
+      records.push({ sys, dia, memo, time: displayTime, displayTime: displayTime, rawTime: now.toISOString() });
       localStorage.setItem('bpRecords', JSON.stringify(records));
 
       document.getElementById('sys').value = '';
       document.getElementById('dia').value = '';
+      document.getElementById('memo').value = '';
       updateUI();
       alert('기록되었습니다!');
     });
