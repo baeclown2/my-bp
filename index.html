@@ -19,12 +19,12 @@
     ul { list-style: none; padding: 0; margin: 0; }
     li { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #f3f4f6; }
     
-    /* 최근 기록 글씨 크기 확대 및 디자인 변경 */
+    /* 최근 기록 글씨 크기 */
     .bp-val { font-size: 20px; font-weight: 800; color: #111827; }
     .unit { font-size: 14px; font-weight: normal; color: #6b7280; }
     .date { color: #4b5563; font-size: 14px; font-weight: 600; margin-top: 4px; }
     
-    /* 삭제 버튼 아담하게 축소 */
+    /* 삭제 버튼 */
     .del-btn { background: #fee2e2; color: #ef4444; border: none; padding: 5px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: bold; flex-shrink: 0; }
   </style>
 </head>
@@ -70,14 +70,27 @@
           { label: '이완기', data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f6', tension: 0.2 }
         ]
       },
-      options: { responsive: true, scales: { y: { min: 50, max: 180 } } }
+      options: { 
+        responsive: true, 
+        scales: { 
+          x: {
+            ticks: {
+              font: { size: 10 },
+              maxRotation: 45,
+              minRotation: 0
+            }
+          },
+          y: { min: 50, max: 180 } 
+        } 
+      }
     });
 
     function updateUI() {
-      records.sort((a, b) => new Date(a.rawTime) - new Date(b.rawTime));
+      records.sort((a, b) => new Date(a.rawTime || 0) - new Date(b.rawTime || 0));
       const recentRecords = records.slice(-10);
 
-      chart.data.labels = recentRecords.map(r => r.time.slice(5, 16));
+      // 그래프 가로축 라벨에 날짜 + 시간 표시 (예: 10/24 09:00)
+      chart.data.labels = recentRecords.map(r => r.displayTime || r.time);
       chart.data.datasets[0].data = recentRecords.map(r => r.sys);
       chart.data.datasets[1].data = recentRecords.map(r => r.dia);
       chart.update();
@@ -89,7 +102,7 @@
           <li>
             <div>
               <div class="bp-val">${r.sys} / ${r.dia} <span class="unit">mmHg</span></div>
-              <div class="date">🕒 ${r.time}</div>
+              <div class="date">🕒 ${r.displayTime || r.time}</div>
             </div>
             <button class="del-btn" onclick="deleteRecord(${actualIndex})">삭제</button>
           </li>
@@ -110,9 +123,15 @@
       const sys = Number(document.getElementById('sys').value);
       const dia = Number(document.getElementById('dia').value);
       const now = new Date();
-      const timeStr = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      
+      const month = now.getMonth() + 1;
+      const date = now.getDate();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      
+      const displayTime = `${month}/${date} ${hours}:${minutes}`;
 
-      records.push({ sys, dia, time: timeStr, rawTime: now.toISOString() });
+      records.push({ sys, dia, time: displayTime, displayTime: displayTime, rawTime: now.toISOString() });
       localStorage.setItem('bpRecords', JSON.stringify(records));
 
       document.getElementById('sys').value = '';
