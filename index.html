@@ -11,14 +11,21 @@
     body { background: #f3f4f6; margin: 0; padding: 16px; color: #1f2937; }
     .card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 16px; }
     h1 { font-size: 20px; margin-top: 0; color: #2563eb; text-align: center; }
+    h3 { font-size: 17px; margin-bottom: 12px; }
     label { font-size: 14px; color: #4b5563; font-weight: 600; display: block; margin-top: 10px; }
     input { width: 100%; padding: 12px; margin-top: 4px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; }
-    button { width: 100%; background: #2563eb; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 16px; cursor: pointer; }
+    button.submit-btn { width: 100%; background: #2563eb; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 16px; cursor: pointer; }
     .alarm-info { background: #eff6ff; padding: 12px; border-radius: 8px; font-size: 13px; color: #1e40af; margin-bottom: 16px; text-align: center; }
     ul { list-style: none; padding: 0; margin: 0; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6; font-size: 15px; }
-    .date { color: #6b7280; font-size: 12px; margin-top: 2px; }
-    .del-btn { background: #fee2e2; color: #ef4444; border: none; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: bold; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #f3f4f6; }
+    
+    /* 최근 기록 글씨 크기 확대 및 디자인 변경 */
+    .bp-val { font-size: 20px; font-weight: 800; color: #111827; }
+    .unit { font-size: 14px; font-weight: normal; color: #6b7280; }
+    .date { color: #4b5563; font-size: 14px; font-weight: 600; margin-top: 4px; }
+    
+    /* 삭제 버튼 아담하게 축소 */
+    .del-btn { background: #fee2e2; color: #ef4444; border: none; padding: 5px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: bold; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -36,7 +43,7 @@
       <label>이완기 (낮은 혈압)</label>
       <input type="number" id="dia" placeholder="예: 80" required>
       
-      <button type="submit">기록하기</button>
+      <button type="submit" class="submit-btn">기록하기</button>
     </form>
   </div>
 
@@ -81,8 +88,8 @@
         return `
           <li>
             <div>
-              <div><b>${r.sys} / ${r.dia}</b> mmHg</div>
-              <div class="date">${r.time}</div>
+              <div class="bp-val">${r.sys} / ${r.dia} <span class="unit">mmHg</span></div>
+              <div class="date">🕒 ${r.time}</div>
             </div>
             <button class="del-btn" onclick="deleteRecord(${actualIndex})">삭제</button>
           </li>
